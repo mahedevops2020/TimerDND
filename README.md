@@ -46,7 +46,7 @@ The app will guide users to the appropriate system settings screen to grant this
 
 Clone the repository
 
-git clone https://github.com/mahedevops2020/Timer_DND.git
+git clone https://github.com/mahedevops2020/TimerDND.git
 
 
 Open the project in Android Studio.
