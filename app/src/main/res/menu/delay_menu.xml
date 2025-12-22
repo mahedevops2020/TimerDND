@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/delay_3s"
+        android:title="-3 seconds" />
+    <item android:id="@+id/delay_6s"
+        android:title="-6 seconds" />
+    <item android:id="@+id/delay_9s"
+        android:title="-9 seconds" />
+</menu>
