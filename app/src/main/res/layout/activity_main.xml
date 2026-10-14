@@ -74,12 +74,72 @@
 
     </LinearLayout>
 
+    <com.example.timerdnd.MarkerProgressBar
+        android:id="@+id/markerBar"
+        android:layout_width="match_parent"
+        android:layout_height="110dp"
+        android:layout_marginTop="30dp"
+        android:contentDescription="Timer progress bar with alert points" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="monospace"
+            android:text="Tap the bar to add an alert point.\nTap a point to edit or delete it."
+            android:textColor="#666666"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/lengthBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:background="@drawable/button_background"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:text="Length 10:00"
+            android:textColor="#666666"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginRight="24dp"
+            android:fontFamily="monospace"
+            android:text="● Vibrate"
+            android:textColor="#FFB300"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:text="● Beep"
+            android:textColor="#26C6DA"
+            android:textSize="12sp" />
+    </LinearLayout>
+
     <TextView
         android:id="@+id/infoText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_horizontal"
-        android:layout_marginTop="30dp"
+        android:layout_marginTop="24dp"
         android:text="Screen stays on while timer runs\nDark theme saves battery on OLED"
         android:textColor="#444444"
         android:textSize="12sp"
