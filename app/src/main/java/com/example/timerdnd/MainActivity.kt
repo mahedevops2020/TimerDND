@@ -1,6 +1,10 @@
 package com.example.timerdnd
 
+import android.app.AlarmManager
 import android.app.NotificationManager
+import android.app.PendingIntent
+import android.net.Uri
+import android.os.PowerManager
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
@@ -23,6 +27,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.RadioButton
 import android.widget.RadioGroup
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -40,6 +45,7 @@ class MainActivity : AppCompatActivity() {
     private var startTime = 0L
     private var elapsedTime = 0L
     private var isRunning = false
+    private var scheduledCount = 0
 
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var notificationManager: NotificationManager
@@ -85,6 +91,9 @@ class MainActivity : AppCompatActivity() {
         markerBar.onMarkerTapped = { marker -> showMarkerDialog(marker, marker.timeMs) }
         lengthBtn.setOnClickListener { showLengthDialog() }
         updateLengthButton()
+
+        setupLevelBar(R.id.vibrateLevel, "vibrate_level") { Alerts.vibrate(this) }
+        setupLevelBar(R.id.beepLevel, "beep_level") { Alerts.beep(this) }
 
         checkDndPermission()
 
@@ -166,8 +175,19 @@ class MainActivity : AppCompatActivity() {
                 startTime = System.currentTimeMillis() - elapsedTime
                 isRunning = true
                 handler.post(updateTimer)
+                scheduleAlarms()
+                requestBatteryExemption()
                 window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 startBtn.isActivated = true
+                if (Build.VERSION.SDK_INT >= 33 &&
+                    checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) {
+                    requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
+                }
+                androidx.core.content.ContextCompat.startForegroundService(
+                    this, Intent(this, TimerService::class.java)
+                )
             }
         }
     }
@@ -179,6 +199,8 @@ class MainActivity : AppCompatActivity() {
             handler.removeCallbacks(updateTimer)
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             startBtn.isActivated = false
+            stopService(Intent(this, TimerService::class.java))
+            cancelAlarms()
         }
     }
 
@@ -205,7 +227,7 @@ class MainActivity : AppCompatActivity() {
     private fun checkMarkers() {
         for (marker in markerBar.markers) {
             if (marker.timeMs <= elapsedTime && firedMarkers.add(marker)) {
-                fireAlert(marker)
+                Alerts.fireOnce(this, alertId(marker), marker.type)
             }
         }
     }
@@ -216,43 +238,71 @@ class MainActivity : AppCompatActivity() {
         firedMarkers.addAll(markerBar.markers.filter { it.timeMs <= elapsedTime })
         saveMarkerState()
         markerBar.invalidate()
+        if (isRunning) scheduleAlarms()
     }
 
-    private fun fireAlert(marker: AlertMarker) {
-        if (marker.type == AlertMarker.BEEP) beep() else vibrate()
+    /** Seek bar that stores a 0-100 level and plays a preview when released. */
+    private fun setupLevelBar(id: Int, key: String, preview: () -> Unit) {
+        val bar = findViewById<SeekBar>(id)
+        bar.progress = prefs.getInt(key, 50)
+        bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
+                if (fromUser) prefs.edit().putInt(key, p).apply()
+            }
+            override fun onStartTrackingTouch(sb: SeekBar) {}
+            override fun onStopTrackingTouch(sb: SeekBar) = preview()
+        })
     }
 
-    private fun beep() {
-        try {
-            val tone = ToneGenerator(AudioManager.STREAM_ALARM, 100)
-            tone.startTone(ToneGenerator.TONE_PROP_BEEP, 300)
-            handler.postDelayed({ tone.release() }, 600)
-        } catch (e: RuntimeException) {
-            // ToneGenerator can fail to initialise on some devices; skip the beep rather than crash.
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    private fun vibrate() {
-        val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
-        } else {
-            getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
-        }
-        if (!vibrator.hasVibrator()) return
-
-        // Alarm usage so the vibration is not suppressed by Do Not Disturb ("Alarms only").
-        val attrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ALARM)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            vibrator.vibrate(
-                VibrationEffect.createOneShot(400, VibrationEffect.DEFAULT_AMPLITUDE),
-                attrs
+    // Backup for a locked screen: the activity fires alerts itself while it is running, and these alarms
+    // fire them if the app is frozen. Alerts.fireOnce prevents doubles.
+    private fun scheduleAlarms() {
+        cancelAlarms()
+        val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        // setAlarmClock is exempt from Doze and OEM battery deferral, so alerts fire on time while locked.
+        val showApp = PendingIntent.getActivity(
+            this, 100, Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        markerBar.markers.forEachIndexed { i, marker ->
+            if (marker.timeMs <= elapsedTime) return@forEachIndexed
+            am.setAlarmClock(
+                AlarmManager.AlarmClockInfo(startTime + marker.timeMs, showApp),
+                alarmIntent(i, marker)
             )
-        } else {
-            vibrator.vibrate(longArrayOf(0, 400), -1, attrs)
+        }
+        scheduledCount = markerBar.markers.size
+    }
+
+    private fun cancelAlarms() {
+        val am = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        for (i in 0 until maxOf(scheduledCount, markerBar.markers.size)) {
+            am.cancel(alarmIntent(i, null))
+        }
+        scheduledCount = 0
+    }
+
+    private fun alertId(marker: AlertMarker) = "$startTime:${marker.timeMs}"
+
+    private fun alarmIntent(index: Int, marker: AlertMarker?): PendingIntent {
+        val intent = Intent(this, AlertReceiver::class.java)
+        if (marker != null) intent.putExtra("type", marker.type).putExtra("id", alertId(marker))
+        return PendingIntent.getBroadcast(
+            this, index, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+    }
+
+    private fun requestBatteryExemption() {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                        .setData(Uri.parse("package:$packageName"))
+                )
+            } catch (e: RuntimeException) {
+                // Not available on this device; alarms still work.
+            }
         }
     }
 

@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.timerdnd"
         minSdk = 23
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     buildTypes {
