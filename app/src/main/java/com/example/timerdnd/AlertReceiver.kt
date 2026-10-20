@@ -16,6 +16,6 @@ class AlertReceiver : BroadcastReceiver() {
             intent.getIntExtra("type", AlertMarker.VIBRATE)
         )
         // Keep the receiver alive long enough for the beep to play and be released.
-        Handler(Looper.getMainLooper()).postDelayed({ pending.finish() }, 800)
+        Handler(Looper.getMainLooper()).postDelayed({ pending.finish() }, 1500)
     }
 }

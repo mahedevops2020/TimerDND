@@ -14,9 +14,24 @@ import android.os.VibratorManager
 /** Plays the marker vibration / beep. Usable from the activity and from the alarm receiver. */
 object Alerts {
 
-    private fun level(context: Context, key: String): Int =
+    /** Selectable beep tones: display name, ToneGenerator tone, play length in ms. */
+    class Tone(val name: String, val tone: Int, val durationMs: Int)
+
+    val tones = listOf(
+        Tone("Beep", ToneGenerator.TONE_PROP_BEEP, 200),
+        Tone("Double beep", ToneGenerator.TONE_PROP_BEEP2, 400),
+        Tone("Chime", ToneGenerator.TONE_PROP_ACK, 500),
+        Tone("Pip", ToneGenerator.TONE_SUP_PIP, 400),
+        Tone("Triple pip", ToneGenerator.TONE_CDMA_PIP, 600),
+        Tone("Alert", ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 600),
+        Tone("Ringback", ToneGenerator.TONE_CDMA_ABBR_ALERT, 700)
+    )
+
+    fun prefs(context: Context) =
         context.getSharedPreferences("timerdnd_prefs", Context.MODE_PRIVATE)
-            .getInt(key, 50).coerceIn(1, 100)
+
+    private fun level(context: Context, key: String): Int =
+        prefs(context).getInt(key, 50).coerceIn(1, 100)
 
     private val fired = HashMap<String, Long>()
 
@@ -37,8 +52,9 @@ object Alerts {
     fun beep(context: Context) {
         try {
             val tone = ToneGenerator(AudioManager.STREAM_ALARM, level(context, "beep_level"))
-            tone.startTone(ToneGenerator.TONE_PROP_BEEP, 200)
-            Handler(Looper.getMainLooper()).postDelayed({ tone.release() }, 500)
+            val choice = tones[prefs(context).getInt("beep_tone", 0).coerceIn(0, tones.size - 1)]
+            tone.startTone(choice.tone, choice.durationMs)
+            Handler(Looper.getMainLooper()).postDelayed({ tone.release() }, choice.durationMs + 300L)
         } catch (e: RuntimeException) {
             // ToneGenerator can fail to initialise on some devices; skip the beep rather than crash.
         }

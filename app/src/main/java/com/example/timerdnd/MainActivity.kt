@@ -28,6 +28,10 @@ import android.widget.EditText
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.SeekBar
+import android.widget.Spinner
+import android.widget.ArrayAdapter
+import android.widget.AdapterView
+import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -94,6 +98,8 @@ class MainActivity : AppCompatActivity() {
 
         setupLevelBar(R.id.vibrateLevel, "vibrate_level") { Alerts.vibrate(this) }
         setupLevelBar(R.id.beepLevel, "beep_level") { Alerts.beep(this) }
+
+        setupToneSpinner()
 
         checkDndPermission()
 
@@ -239,6 +245,31 @@ class MainActivity : AppCompatActivity() {
         saveMarkerState()
         markerBar.invalidate()
         if (isRunning) scheduleAlarms()
+    }
+
+    private fun setupToneSpinner() {
+        val spinner = findViewById<Spinner>(R.id.toneSpinner)
+        val adapter = object : ArrayAdapter<String>(
+            this, android.R.layout.simple_spinner_item, Alerts.tones.map { it.name }
+        ) {
+            private fun tint(v: View): View = v.also { (it as TextView).setTextColor(0xFFDDDDDD.toInt()) }
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup) =
+                tint(super.getView(position, convertView, parent))
+            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup) =
+                super.getDropDownView(position, convertView, parent).also {
+                    (it as TextView).setTextColor(0xFF000000.toInt())
+                }
+        }
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinner.adapter = adapter
+        spinner.setSelection(prefs.getInt("beep_tone", 0).coerceIn(0, Alerts.tones.size - 1), false)
+        spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                prefs.edit().putInt("beep_tone", pos).apply()
+                Alerts.beep(this@MainActivity)
+            }
+            override fun onNothingSelected(p: AdapterView<*>?) {}
+        }
     }
 
     /** Seek bar that stores a 0-100 level and plays a preview when released. */
